@@ -71,7 +71,12 @@
             wakeLock = null;
           });
         } catch (error) {
-          statusLabel.textContent = "Wake Lock no disponible";
+          if (statusLabel.textContent === "" || statusLabel.textContent === "Toque para reproducir") {
+            statusLabel.textContent =
+              error && error.name === "NotAllowedError"
+                ? "Permiso de Wake Lock denegado"
+                : "Wake Lock no disponible";
+          }
         }
       }
 
@@ -98,6 +103,7 @@
 
       video.addEventListener("error", async () => {
         if (triedFallback) {
+          showBlackScreen();
           statusLabel.textContent = "Error cargando video";
           return;
         }

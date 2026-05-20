@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>Video Dico</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        touch-action: manipulation;
+      }
+      #app {
+        position: fixed;
+        inset: 0;
+        background: #000;
+      }
+      #player {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: none;
+      }
+      #status {
+        position: absolute;
+        left: 50%;
+        bottom: 20px;
+        transform: translateX(-50%);
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        color: #bbb;
+        letter-spacing: 0.02em;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app" aria-label="Video toggle app">
+      <video id="player" preload="auto" playsinline webkit-playsinline src="./video.mp4"></video>
+      <div id="status">Toque para reproducir</div>
+    </main>
+    <script>
+      const app = document.getElementById("app");
+      const video = document.getElementById("player");
+      const statusLabel = document.getElementById("status");
+      const DEFAULT_VIDEO_URL = "./video.mp4";
+      const FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
+      let isPlaying = false;
+      let wakeLock = null;
+      let triedFallback = false;
+
+      video.src = DEFAULT_VIDEO_URL;
+
+      async function requestWakeLock() {
+        if (wakeLock) return;
+        if (!("wakeLock" in navigator)) return;
+        try {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release", () => {
+            wakeLock = null;
+          });
+        } catch (error) {
+          if (statusLabel.textContent === "" || statusLabel.textContent === "Toque para reproducir") {
+            statusLabel.textContent =
+              error && error.name === "NotAllowedError"
+                ? "Permiso de Wake Lock denegado"
+                : "Wake Lock no disponible";
+          }
+        }
+      }
+
+      function showBlackScreen() {
+        isPlaying = false;
+        video.pause();
+        video.currentTime = 0;
+        video.style.display = "none";
+        statusLabel.textContent = "Toque para reproducir";
+      }
+
+      async function showVideo() {
+        isPlaying = true;
+        video.style.display = "block";
+        statusLabel.textContent = "";
+        try {
+          await video.play();
+        } catch (error) {
+          isPlaying = false;
+          video.style.display = "none";
+          statusLabel.textContent = "No se pudo reproducir el video";
+        }
+      }
+
+      video.addEventListener("error", async () => {
+        if (triedFallback) {
+          showBlackScreen();
+          statusLabel.textContent = "Error cargando video";
+          return;
+        }
+        triedFallback = true;
+        video.src = FALLBACK_VIDEO_URL;
+        if (isPlaying) {
+          await showVideo();
+        }
+      });
+
+      async function toggleScreen() {
+        await requestWakeLock();
+        if (isPlaying) {
+          showBlackScreen();
+        } else {
+          await showVideo();
+        }
+      }
+
+      app.addEventListener("click", toggleScreen);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") requestWakeLock();
+      });
+      showBlackScreen();
+    </script>
+  </body>
+</html>

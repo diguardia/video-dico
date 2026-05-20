@@ -63,7 +63,8 @@
       video.src = DEFAULT_VIDEO_URL;
 
       async function requestWakeLock() {
-        if (!("wakeLock" in navigator) || wakeLock) return;
+        if (wakeLock) return;
+        if (!("wakeLock" in navigator)) return;
         try {
           wakeLock = await navigator.wakeLock.request("screen");
           wakeLock.addEventListener("release", () => {
@@ -96,7 +97,7 @@
       }
 
       video.addEventListener("error", async () => {
-        if (triedFallback || video.src.includes(FALLBACK_VIDEO_URL)) {
+        if (triedFallback) {
           statusLabel.textContent = "Error cargando video";
           return;
         }

@@ -47,14 +47,14 @@
   </head>
   <body>
     <main id="app" aria-label="Video toggle app">
-      <video id="player" preload="auto" playsinline webkit-playsinline src="./video.mp4"></video>
+      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis.mp4"></video>
       <div id="status">Toque para reproducir</div>
     </main>
     <script>
       const app = document.getElementById("app");
       const video = document.getElementById("player");
       const statusLabel = document.getElementById("status");
-      const DEFAULT_VIDEO_URL = "./video.mp4";
+      const DEFAULT_VIDEO_URL = "./luis.mp4";
       const FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
       let isPlaying = false;
       let wakeLock = null;

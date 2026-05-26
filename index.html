@@ -67,7 +67,7 @@
   </head>
   <body>
     <main id="app" aria-label="Video toggle app">
-      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis-android-safe.mp4"></video>
+      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis-android-ultra.mp4"></video>
       <div id="status">Toque para reproducir</div>
       <div id="debug" aria-live="polite"></div>
     </main>
@@ -76,14 +76,23 @@
       var video = document.getElementById("player");
       var statusLabel = document.getElementById("status");
       var debugBox = document.getElementById("debug");
-      var DEFAULT_VIDEO_URL = "./luis-android-safe.mp4";
+      var DEFAULT_VIDEO_URL = "./luis-android-ultra.mp4";
       var FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
+      var SOURCE_CANDIDATES = [
+        "./luis-android-ultra.mp4",
+        "./luis-android-safe.mp4",
+        "./luis-android-compat.mp4",
+        "./luis-android.mp4",
+        "./luis.mp4",
+        "./luis-android.3gp",
+        FALLBACK_VIDEO_URL
+      ];
       var query = window.location.search || "";
       var isDebug = query.indexOf("debug=1") !== -1;
       var mp4Support = "";
       var isPlaying = false;
       var wakeLock = null;
-      var triedFallback = false;
+      var sourceIndex = 0;
       var playWatchdogId = null;
 
       if (isDebug) {
@@ -132,8 +141,13 @@
         return mp4Support === "probably" || mp4Support === "maybe";
       }
 
-      video.src = DEFAULT_VIDEO_URL;
-      appendDebug("video.src=" + video.src);
+      function setActiveSource(index) {
+        sourceIndex = index;
+        video.src = SOURCE_CANDIDATES[sourceIndex] || DEFAULT_VIDEO_URL;
+        appendDebug("video.src=" + video.src + " (idx=" + sourceIndex + ")");
+      }
+
+      setActiveSource(0);
 
       function requestWakeLock() {
         if (wakeLock) return;
@@ -189,7 +203,7 @@
         }
         playWatchdogId = setTimeout(function () {
           if (isPlaying && video.paused) {
-            statusLabel.textContent = "El video no inicio (codec o formato no soportado)";
+            statusLabel.textContent = "El video no inicio (" + videoErrorLabel(video.error) + ")";
             appendDebug("Watchdog: video sigue en pausa luego de 4s");
             statusSnapshot();
           }
@@ -202,7 +216,7 @@
           isPlaying = false;
           video.style.display = "none";
           label = videoErrorLabel(video.error);
-          statusLabel.textContent = "No se pudo reproducir (" + label + ")";
+          statusLabel.textContent = "No se pudo reproducir (" + label + ") fuente " + (sourceIndex + 1);
           appendDebug("play() throw: " + (error && error.message ? error.message : "sin detalle"));
           appendDebug("src activo: " + video.currentSrc);
           return;
@@ -213,7 +227,7 @@
             isPlaying = false;
             video.style.display = "none";
             label = videoErrorLabel(video.error);
-            statusLabel.textContent = "No se pudo reproducir (" + label + ")";
+            statusLabel.textContent = "No se pudo reproducir (" + label + ") fuente " + (sourceIndex + 1);
             appendDebug("play() promise rejected");
             appendDebug("src activo: " + video.currentSrc);
             statusSnapshot();
@@ -253,14 +267,14 @@
         var label = videoErrorLabel(video.error);
         appendDebug("Evento: error " + label);
         statusSnapshot();
-        if (triedFallback) {
+        if (sourceIndex >= SOURCE_CANDIDATES.length - 1) {
           showBlackScreen();
           statusLabel.textContent = "Error cargando video (" + label + ")";
           return;
         }
-        triedFallback = true;
-        appendDebug("Probando video fallback remoto");
-        video.src = FALLBACK_VIDEO_URL;
+        sourceIndex += 1;
+        appendDebug("Probando siguiente fuente idx=" + sourceIndex);
+        setActiveSource(sourceIndex);
         if (isPlaying) {
           showVideo();
         }

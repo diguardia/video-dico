@@ -22,3 +22,17 @@ Para mantener compatibilidad, el JavaScript está escrito en estilo ES5 (sin `as
 La app solicita `Screen Wake Lock` (cuando el navegador lo soporta) para evitar suspensión/apagado mientras esté activa.
 
 En navegadores antiguos donde Wake Lock no exista, la app sigue funcionando sin ese bloqueo de pantalla.
+
+## Diagnóstico en pantalla (sin consola)
+
+Si solo ves pantalla negra, abrí la app con:
+
+- `index.html?debug=1`
+
+Eso muestra un panel con eventos de video y estado interno (`readyState`, `networkState`, errores de códec, etc.).
+
+Checklist rápido:
+
+1. Si aparece `MEDIA_ERR_SRC_NOT_SUPPORTED`: el códec de ese MP4 no lo soporta el dispositivo.
+2. Si no aparece `playing` después del toque: bloqueo de autoplay/gesture o formato no compatible.
+3. Si queda en `waiting/stalled`: problema de lectura de archivo o red.

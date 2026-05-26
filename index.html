@@ -43,24 +43,89 @@
         letter-spacing: 0.02em;
         user-select: none;
       }
+      #debug {
+        display: none;
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        max-height: 40%;
+        overflow: auto;
+        padding: 8px;
+        border: 1px solid #333;
+        background: rgba(0, 0, 0, 0.8);
+        color: #9fe29f;
+        font-family: monospace;
+        font-size: 11px;
+        line-height: 1.35;
+        white-space: pre-wrap;
+      }
+      body.debug #debug {
+        display: block;
+      }
     </style>
   </head>
   <body>
     <main id="app" aria-label="Video toggle app">
       <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis.mp4"></video>
       <div id="status">Toque para reproducir</div>
+      <div id="debug" aria-live="polite"></div>
     </main>
     <script>
       var app = document.getElementById("app");
       var video = document.getElementById("player");
       var statusLabel = document.getElementById("status");
+      var debugBox = document.getElementById("debug");
       var DEFAULT_VIDEO_URL = "./luis.mp4";
       var FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
+      var query = window.location.search || "";
+      var isDebug = query.indexOf("debug=1") !== -1;
       var isPlaying = false;
       var wakeLock = null;
       var triedFallback = false;
+      var playWatchdogId = null;
+
+      if (isDebug) {
+        document.body.className = document.body.className
+          ? document.body.className + " debug"
+          : "debug";
+      }
+
+      function appendDebug(message) {
+        if (!isDebug) return;
+        var now = new Date();
+        var hh = ("0" + now.getHours()).slice(-2);
+        var mm = ("0" + now.getMinutes()).slice(-2);
+        var ss = ("0" + now.getSeconds()).slice(-2);
+        var line = "[" + hh + ":" + mm + ":" + ss + "] " + message;
+        debugBox.textContent += (debugBox.textContent ? "\n" : "") + line;
+        debugBox.scrollTop = debugBox.scrollHeight;
+      }
+
+      function videoErrorLabel(err) {
+        var code = err && err.code;
+        if (code === 1) return "MEDIA_ERR_ABORTED";
+        if (code === 2) return "MEDIA_ERR_NETWORK";
+        if (code === 3) return "MEDIA_ERR_DECODE";
+        if (code === 4) return "MEDIA_ERR_SRC_NOT_SUPPORTED";
+        return "UNKNOWN";
+      }
+
+      function statusSnapshot() {
+        var snap =
+          "readyState=" +
+          video.readyState +
+          " networkState=" +
+          video.networkState +
+          " paused=" +
+          video.paused +
+          " currentTime=" +
+          video.currentTime.toFixed(2);
+        appendDebug(snap);
+      }
 
       video.src = DEFAULT_VIDEO_URL;
+      appendDebug("video.src=" + video.src);
 
       function requestWakeLock() {
         if (wakeLock) return;
@@ -76,6 +141,7 @@
             }
           })
           .catch(function (error) {
+            appendDebug("WakeLock error: " + (error && error.name ? error.name : "unknown"));
             if (statusLabel.textContent === "" || statusLabel.textContent === "Toque para reproducir") {
               statusLabel.textContent =
                 error && error.name === "NotAllowedError"
@@ -87,17 +153,35 @@
 
       function showBlackScreen() {
         isPlaying = false;
+        if (playWatchdogId) {
+          clearTimeout(playWatchdogId);
+          playWatchdogId = null;
+        }
         video.pause();
         video.currentTime = 0;
         video.style.display = "none";
         statusLabel.textContent = "Toque para reproducir";
+        appendDebug("Pantalla negra");
       }
 
       function showVideo() {
         var playResult;
         isPlaying = true;
         video.style.display = "block";
-        statusLabel.textContent = "";
+        statusLabel.textContent = "Cargando video...";
+        appendDebug("Intentando reproducir");
+        statusSnapshot();
+
+        if (playWatchdogId) {
+          clearTimeout(playWatchdogId);
+        }
+        playWatchdogId = setTimeout(function () {
+          if (isPlaying && video.paused) {
+            statusLabel.textContent = "El video no inicio (codec o formato no soportado)";
+            appendDebug("Watchdog: video sigue en pausa luego de 4s");
+            statusSnapshot();
+          }
+        }, 4000);
 
         try {
           playResult = video.play();
@@ -105,6 +189,7 @@
           isPlaying = false;
           video.style.display = "none";
           statusLabel.textContent = "No se pudo reproducir el video";
+          appendDebug("play() throw: " + (error && error.message ? error.message : "sin detalle"));
           return;
         }
 
@@ -113,17 +198,51 @@
             isPlaying = false;
             video.style.display = "none";
             statusLabel.textContent = "No se pudo reproducir el video";
+            appendDebug("play() promise rejected");
+            statusSnapshot();
           });
         }
       }
 
+      video.addEventListener("loadedmetadata", function () {
+        appendDebug("Evento: loadedmetadata " + video.videoWidth + "x" + video.videoHeight);
+      });
+
+      video.addEventListener("canplay", function () {
+        appendDebug("Evento: canplay");
+      });
+
+      video.addEventListener("playing", function () {
+        if (playWatchdogId) {
+          clearTimeout(playWatchdogId);
+          playWatchdogId = null;
+        }
+        statusLabel.textContent = "Reproduciendo";
+        appendDebug("Evento: playing");
+        statusSnapshot();
+      });
+
+      video.addEventListener("stalled", function () {
+        appendDebug("Evento: stalled");
+        statusSnapshot();
+      });
+
+      video.addEventListener("waiting", function () {
+        appendDebug("Evento: waiting");
+        statusSnapshot();
+      });
+
       video.addEventListener("error", function () {
+        var label = videoErrorLabel(video.error);
+        appendDebug("Evento: error " + label);
+        statusSnapshot();
         if (triedFallback) {
           showBlackScreen();
-          statusLabel.textContent = "Error cargando video";
+          statusLabel.textContent = "Error cargando video (" + label + ")";
           return;
         }
         triedFallback = true;
+        appendDebug("Probando video fallback remoto");
         video.src = FALLBACK_VIDEO_URL;
         if (isPlaying) {
           showVideo();
@@ -131,6 +250,7 @@
       });
 
       function toggleScreen() {
+        appendDebug("Tap detectado");
         requestWakeLock();
         if (isPlaying) {
           showBlackScreen();
@@ -142,10 +262,12 @@
       app.addEventListener("click", toggleScreen);
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState === "visible") {
+          appendDebug("visibilitychange: visible");
           requestWakeLock();
         }
       });
 
+      appendDebug("UA: " + navigator.userAgent);
       showBlackScreen();
     </script>
   </body>

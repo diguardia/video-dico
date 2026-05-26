@@ -87,6 +87,8 @@
         "./luis-android.3gp",
         FALLBACK_VIDEO_URL
       ];
+      var CACHE_BUST = "v=20260526-1";
+      var PROBE_TIMEOUT_MS = 3000;
       var query = window.location.search || "";
       var isDebug = query.indexOf("debug=1") !== -1;
       var mp4Support = "";
@@ -94,6 +96,8 @@
       var wakeLock = null;
       var sourceIndex = 0;
       var playWatchdogId = null;
+      var isProbing = false;
+      var hasProbedSources = false;
 
       if (isDebug) {
         document.body.className = document.body.className
@@ -142,9 +146,96 @@
       }
 
       function setActiveSource(index) {
+        var rawSrc;
         sourceIndex = index;
-        video.src = SOURCE_CANDIDATES[sourceIndex] || DEFAULT_VIDEO_URL;
+        rawSrc = SOURCE_CANDIDATES[sourceIndex] || DEFAULT_VIDEO_URL;
+        video.src = rawSrc + (rawSrc.indexOf("?") === -1 ? "?" : "&") + CACHE_BUST;
         appendDebug("video.src=" + video.src + " (idx=" + sourceIndex + ")");
+      }
+
+      function probeSources(done) {
+        var probeIndex = 0;
+
+        if (hasProbedSources || isProbing) {
+          if (done) done();
+          return;
+        }
+
+        isProbing = true;
+        statusLabel.textContent = "Probando formatos de video...";
+        appendDebug("Iniciando auto-prueba de fuentes");
+
+        function tryNext() {
+          var candidate;
+          var tester;
+          var timerId;
+          var settled = false;
+
+          if (probeIndex >= SOURCE_CANDIDATES.length) {
+            isProbing = false;
+            hasProbedSources = true;
+            appendDebug("Auto-prueba: ninguna fuente valida");
+            setActiveSource(SOURCE_CANDIDATES.length - 1);
+            if (done) done();
+            return;
+          }
+
+          candidate = SOURCE_CANDIDATES[probeIndex];
+          tester = document.createElement("video");
+          tester.preload = "metadata";
+
+          function cleanup() {
+            tester.onerror = null;
+            tester.onloadedmetadata = null;
+            tester.oncanplay = null;
+            if (timerId) {
+              clearTimeout(timerId);
+              timerId = null;
+            }
+          }
+
+          function pass(reason) {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            isProbing = false;
+            hasProbedSources = true;
+            appendDebug("Auto-prueba OK idx=" + probeIndex + " motivo=" + reason);
+            setActiveSource(probeIndex);
+            if (done) done();
+          }
+
+          function fail(reason) {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            appendDebug("Auto-prueba FAIL idx=" + probeIndex + " motivo=" + reason);
+            probeIndex += 1;
+            tryNext();
+          }
+
+          tester.onerror = function () {
+            fail("error");
+          };
+
+          tester.onloadedmetadata = function () {
+            pass("loadedmetadata");
+          };
+
+          tester.oncanplay = function () {
+            pass("canplay");
+          };
+
+          timerId = setTimeout(function () {
+            fail("timeout");
+          }, PROBE_TIMEOUT_MS);
+
+          appendDebug("Auto-prueba intento idx=" + probeIndex + " src=" + candidate);
+          tester.src = candidate + (candidate.indexOf("?") === -1 ? "?" : "&") + CACHE_BUST;
+          tester.load();
+        }
+
+        tryNext();
       }
 
       setActiveSource(0);
@@ -283,6 +374,12 @@
       function toggleScreen() {
         appendDebug("Tap detectado");
         requestWakeLock();
+        if (!hasProbedSources && !isPlaying) {
+          probeSources(function () {
+            showVideo();
+          });
+          return;
+        }
         if (isPlaying) {
           showBlackScreen();
         } else {

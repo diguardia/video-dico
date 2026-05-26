@@ -43,6 +43,23 @@
         letter-spacing: 0.02em;
         user-select: none;
       }
+      #open-external {
+        display: none;
+        position: absolute;
+        left: 50%;
+        bottom: 56px;
+        transform: translateX(-50%);
+        padding: 10px 14px;
+        border: 1px solid #444;
+        border-radius: 6px;
+        background: #121212;
+        color: #e5e5e5;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+      }
+      #open-external.visible {
+        display: inline-block;
+      }
       #debug {
         display: none;
         position: absolute;
@@ -69,12 +86,14 @@
     <main id="app" aria-label="Video toggle app">
       <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis-android-ultra.mp4"></video>
       <div id="status">Toque para reproducir</div>
+      <button id="open-external" type="button">Abrir en reproductor externo</button>
       <div id="debug" aria-live="polite"></div>
     </main>
     <script>
       var app = document.getElementById("app");
       var video = document.getElementById("player");
       var statusLabel = document.getElementById("status");
+      var openExternalBtn = document.getElementById("open-external");
       var debugBox = document.getElementById("debug");
       var DEFAULT_VIDEO_URL = "./luis-android-ultra.mp4";
       var FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
@@ -98,6 +117,7 @@
       var playWatchdogId = null;
       var isProbing = false;
       var hasProbedSources = false;
+      var triedExternalOpen = false;
 
       if (isDebug) {
         document.body.className = document.body.className
@@ -273,8 +293,40 @@
         video.pause();
         video.currentTime = 0;
         video.style.display = "none";
+        openExternalBtn.className = "";
         statusLabel.textContent = "Toque para reproducir";
         appendDebug("Pantalla negra");
+      }
+
+      function absoluteUrlFor(rawSrc) {
+        var a = document.createElement("a");
+        a.href = rawSrc;
+        return a.href;
+      }
+
+      function openExternalPlayer() {
+        var rawSrc = SOURCE_CANDIDATES[sourceIndex] || DEFAULT_VIDEO_URL;
+        var absSrc = absoluteUrlFor(rawSrc);
+        appendDebug("Intentando abrir externo: " + absSrc);
+        try {
+          window.location.href = absSrc;
+        } catch (e1) {
+          appendDebug("open externo location error");
+        }
+        try {
+          window.open(absSrc, "_blank");
+        } catch (e2) {
+          appendDebug("open externo window error");
+        }
+      }
+
+      function showExternalFallback(label) {
+        statusLabel.textContent = "Video no soportado en navegador (" + label + ")";
+        openExternalBtn.className = "visible";
+        if (!triedExternalOpen) {
+          triedExternalOpen = true;
+          openExternalPlayer();
+        }
       }
 
       function showVideo() {
@@ -360,7 +412,7 @@
         statusSnapshot();
         if (sourceIndex >= SOURCE_CANDIDATES.length - 1) {
           showBlackScreen();
-          statusLabel.textContent = "Error cargando video (" + label + ")";
+          showExternalFallback(label);
           return;
         }
         sourceIndex += 1;
@@ -388,6 +440,10 @@
       }
 
       app.addEventListener("click", toggleScreen);
+      openExternalBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        openExternalPlayer();
+      });
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState === "visible") {
           appendDebug("visibilitychange: visible");

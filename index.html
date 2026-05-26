@@ -6,9 +6,6 @@
     <meta name="theme-color" content="#000000" />
     <title>Video Dico</title>
     <style>
-      :root {
-        color-scheme: dark;
-      }
       * {
         box-sizing: border-box;
       }
@@ -23,7 +20,10 @@
       }
       #app {
         position: fixed;
-        inset: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
         background: #000;
       }
       #player {
@@ -51,33 +51,38 @@
       <div id="status">Toque para reproducir</div>
     </main>
     <script>
-      const app = document.getElementById("app");
-      const video = document.getElementById("player");
-      const statusLabel = document.getElementById("status");
-      const DEFAULT_VIDEO_URL = "./luis.mp4";
-      const FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
-      let isPlaying = false;
-      let wakeLock = null;
-      let triedFallback = false;
+      var app = document.getElementById("app");
+      var video = document.getElementById("player");
+      var statusLabel = document.getElementById("status");
+      var DEFAULT_VIDEO_URL = "./luis.mp4";
+      var FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
+      var isPlaying = false;
+      var wakeLock = null;
+      var triedFallback = false;
 
       video.src = DEFAULT_VIDEO_URL;
 
-      async function requestWakeLock() {
+      function requestWakeLock() {
         if (wakeLock) return;
         if (!("wakeLock" in navigator)) return;
-        try {
-          wakeLock = await navigator.wakeLock.request("screen");
-          wakeLock.addEventListener("release", () => {
-            wakeLock = null;
+        navigator.wakeLock
+          .request("screen")
+          .then(function (lock) {
+            wakeLock = lock;
+            if (wakeLock && wakeLock.addEventListener) {
+              wakeLock.addEventListener("release", function () {
+                wakeLock = null;
+              });
+            }
+          })
+          .catch(function (error) {
+            if (statusLabel.textContent === "" || statusLabel.textContent === "Toque para reproducir") {
+              statusLabel.textContent =
+                error && error.name === "NotAllowedError"
+                  ? "Permiso de Wake Lock denegado"
+                  : "Wake Lock no disponible";
+            }
           });
-        } catch (error) {
-          if (statusLabel.textContent === "" || statusLabel.textContent === "Toque para reproducir") {
-            statusLabel.textContent =
-              error && error.name === "NotAllowedError"
-                ? "Permiso de Wake Lock denegado"
-                : "Wake Lock no disponible";
-          }
-        }
       }
 
       function showBlackScreen() {
@@ -88,20 +93,31 @@
         statusLabel.textContent = "Toque para reproducir";
       }
 
-      async function showVideo() {
+      function showVideo() {
+        var playResult;
         isPlaying = true;
         video.style.display = "block";
         statusLabel.textContent = "";
+
         try {
-          await video.play();
+          playResult = video.play();
         } catch (error) {
           isPlaying = false;
           video.style.display = "none";
           statusLabel.textContent = "No se pudo reproducir el video";
+          return;
+        }
+
+        if (playResult && typeof playResult.then === "function") {
+          playResult.catch(function () {
+            isPlaying = false;
+            video.style.display = "none";
+            statusLabel.textContent = "No se pudo reproducir el video";
+          });
         }
       }
 
-      video.addEventListener("error", async () => {
+      video.addEventListener("error", function () {
         if (triedFallback) {
           showBlackScreen();
           statusLabel.textContent = "Error cargando video";
@@ -110,23 +126,26 @@
         triedFallback = true;
         video.src = FALLBACK_VIDEO_URL;
         if (isPlaying) {
-          await showVideo();
+          showVideo();
         }
       });
 
-      async function toggleScreen() {
-        await requestWakeLock();
+      function toggleScreen() {
+        requestWakeLock();
         if (isPlaying) {
           showBlackScreen();
         } else {
-          await showVideo();
+          showVideo();
         }
       }
 
       app.addEventListener("click", toggleScreen);
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") requestWakeLock();
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "visible") {
+          requestWakeLock();
+        }
       });
+
       showBlackScreen();
     </script>
   </body>

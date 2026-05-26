@@ -67,7 +67,7 @@
   </head>
   <body>
     <main id="app" aria-label="Video toggle app">
-      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis.mp4"></video>
+      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis-android.mp4"></video>
       <div id="status">Toque para reproducir</div>
       <div id="debug" aria-live="polite"></div>
     </main>
@@ -76,10 +76,11 @@
       var video = document.getElementById("player");
       var statusLabel = document.getElementById("status");
       var debugBox = document.getElementById("debug");
-      var DEFAULT_VIDEO_URL = "./luis.mp4";
+      var DEFAULT_VIDEO_URL = "./luis-android.mp4";
       var FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
       var query = window.location.search || "";
       var isDebug = query.indexOf("debug=1") !== -1;
+      var mp4Support = "";
       var isPlaying = false;
       var wakeLock = null;
       var triedFallback = false;
@@ -124,6 +125,13 @@
         appendDebug(snap);
       }
 
+      function isMp4LikelySupported() {
+        if (!video.canPlayType) return true;
+        mp4Support = video.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+        appendDebug("canPlayType baseline mp4=" + (mp4Support || "no"));
+        return mp4Support === "probably" || mp4Support === "maybe";
+      }
+
       video.src = DEFAULT_VIDEO_URL;
       appendDebug("video.src=" + video.src);
 
@@ -166,6 +174,13 @@
 
       function showVideo() {
         var playResult;
+
+        if (!isMp4LikelySupported()) {
+          statusLabel.textContent = "Formato no compatible: usa MP4 H.264 Baseline + AAC";
+          appendDebug("Compatibilidad MP4 insuficiente para este archivo/dispositivo");
+          return;
+        }
+
         isPlaying = true;
         video.style.display = "block";
         statusLabel.textContent = "Cargando video...";
@@ -188,7 +203,7 @@
         } catch (error) {
           isPlaying = false;
           video.style.display = "none";
-          statusLabel.textContent = "No se pudo reproducir el video";
+          statusLabel.textContent = "No se pudo reproducir: convierte a MP4 H.264 Baseline + AAC";
           appendDebug("play() throw: " + (error && error.message ? error.message : "sin detalle"));
           return;
         }
@@ -197,7 +212,7 @@
           playResult.catch(function () {
             isPlaying = false;
             video.style.display = "none";
-            statusLabel.textContent = "No se pudo reproducir el video";
+            statusLabel.textContent = "No se pudo reproducir: convierte a MP4 H.264 Baseline + AAC";
             appendDebug("play() promise rejected");
             statusSnapshot();
           });

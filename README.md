@@ -36,3 +36,18 @@ Checklist rápido:
 1. Si aparece `MEDIA_ERR_SRC_NOT_SUPPORTED`: el códec de ese MP4 no lo soporta el dispositivo.
 2. Si no aparece `playing` después del toque: bloqueo de autoplay/gesture o formato no compatible.
 3. Si queda en `waiting/stalled`: problema de lectura de archivo o red.
+
+## Perfil de video recomendado (Android 4.1.2)
+
+Para máxima compatibilidad, convierte tu archivo a:
+
+- Contenedor: MP4
+- Video: H.264 Baseline (nivel 3.0)
+- Audio: AAC-LC, 44.1 kHz, estéreo
+- Resolución sugerida: 854x480 o menor
+
+Comando de ejemplo con FFmpeg:
+
+`ffmpeg -i luis.mp4 -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -vf scale=854:-2 -r 30 -g 60 -c:a aac -ar 44100 -ac 2 -b:a 128k -movflags +faststart luis-android.mp4`
+
+Luego reemplaza el archivo usado por la app (`luis.mp4`) con ese video convertido.

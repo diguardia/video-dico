@@ -67,7 +67,7 @@
   </head>
   <body>
     <main id="app" aria-label="Video toggle app">
-      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis-android.mp4"></video>
+      <video id="player" preload="auto" playsinline webkit-playsinline loop src="./luis-android-compat.mp4"></video>
       <div id="status">Toque para reproducir</div>
       <div id="debug" aria-live="polite"></div>
     </main>
@@ -76,7 +76,7 @@
       var video = document.getElementById("player");
       var statusLabel = document.getElementById("status");
       var debugBox = document.getElementById("debug");
-      var DEFAULT_VIDEO_URL = "./luis-android.mp4";
+      var DEFAULT_VIDEO_URL = "./luis-android-compat.mp4";
       var FALLBACK_VIDEO_URL = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4";
       var query = window.location.search || "";
       var isDebug = query.indexOf("debug=1") !== -1;
@@ -175,11 +175,7 @@
       function showVideo() {
         var playResult;
 
-        if (!isMp4LikelySupported()) {
-          statusLabel.textContent = "Formato no compatible: usa MP4 H.264 Baseline + AAC";
-          appendDebug("Compatibilidad MP4 insuficiente para este archivo/dispositivo");
-          return;
-        }
+        isMp4LikelySupported();
 
         isPlaying = true;
         video.style.display = "block";

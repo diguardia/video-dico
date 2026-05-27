@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Video Dico" />
+    <meta name="screen-orientation" content="landscape" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <title>Video Dico</title>
     <style>
       * {
@@ -118,6 +124,15 @@
       var isProbing = false;
       var hasProbedSources = false;
       var triedExternalOpen = false;
+      var immersiveRequested = false;
+      var kioskTimerId = null;
+      var KIOSK_ENFORCE_INTERVAL_MS = 1800;
+      var strictKioskMode = query.indexOf("kiosk=0") === -1;
+      var prefersStandalone =
+        window.matchMedia &&
+        (window.matchMedia("(display-mode: standalone)").matches ||
+          window.matchMedia("(display-mode: fullscreen)").matches ||
+          window.matchMedia("(display-mode: minimal-ui)").matches);
 
       if (isDebug) {
         document.body.className = document.body.className
@@ -270,6 +285,10 @@
             if (wakeLock && wakeLock.addEventListener) {
               wakeLock.addEventListener("release", function () {
                 wakeLock = null;
+                appendDebug("WakeLock liberado");
+                if (document.visibilityState === "visible" && isPlaying) {
+                  requestWakeLock();
+                }
               });
             }
           })
@@ -282,6 +301,80 @@
                   : "Wake Lock no disponible";
             }
           });
+      }
+
+      function requestFullscreenMode() {
+        var root = document.documentElement;
+        if (!root || !root.requestFullscreen || document.fullscreenElement) {
+          return Promise.resolve(false);
+        }
+        return root
+          .requestFullscreen({ navigationUI: "hide" })
+          .then(function () {
+            appendDebug("Fullscreen activo");
+            return true;
+          })
+          .catch(function (error) {
+            appendDebug(
+              "Fullscreen no disponible: " + (error && error.name ? error.name : "unknown")
+            );
+            return false;
+          });
+      }
+
+      function lockLandscape() {
+        var orientationApi = screen.orientation;
+        if (!orientationApi || !orientationApi.lock) {
+          return Promise.resolve(false);
+        }
+        return orientationApi
+          .lock("landscape")
+          .then(function () {
+            appendDebug("Orientacion bloqueada en horizontal");
+            return true;
+          })
+          .catch(function (error) {
+            appendDebug(
+              "No se pudo bloquear orientacion: " +
+                (error && error.name ? error.name : "unknown")
+            );
+            return false;
+          });
+      }
+
+      function requestImmersiveMode(fromGesture) {
+        var shouldTry = fromGesture || prefersStandalone;
+        if (strictKioskMode) {
+          shouldTry = true;
+        }
+        if (!shouldTry) {
+          return;
+        }
+        if (immersiveRequested && !fromGesture) {
+          lockLandscape();
+          return;
+        }
+        immersiveRequested = true;
+        requestFullscreenMode().then(function () {
+          lockLandscape();
+        });
+      }
+
+      function startKioskEnforcer() {
+        if (!strictKioskMode || kioskTimerId) {
+          return;
+        }
+        kioskTimerId = window.setInterval(function () {
+          if (document.visibilityState !== "visible") {
+            return;
+          }
+          if (isPlaying) {
+            requestImmersiveMode(false);
+            requestWakeLock();
+          }
+          lockLandscape();
+        }, KIOSK_ENFORCE_INTERVAL_MS);
+        appendDebug("Kiosk enforcer activo");
       }
 
       function showBlackScreen() {
@@ -425,6 +518,7 @@
 
       function toggleScreen() {
         appendDebug("Tap detectado");
+        requestImmersiveMode(true);
         requestWakeLock();
         if (!hasProbedSources && !isPlaying) {
           probeSources(function () {
@@ -440,6 +534,12 @@
       }
 
       app.addEventListener("click", toggleScreen);
+      app.addEventListener("dblclick", function (event) {
+        event.preventDefault();
+      });
+      app.addEventListener("contextmenu", function (event) {
+        event.preventDefault();
+      });
       openExternalBtn.addEventListener("click", function (event) {
         event.stopPropagation();
         openExternalPlayer();
@@ -447,11 +547,45 @@
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState === "visible") {
           appendDebug("visibilitychange: visible");
+          requestImmersiveMode(false);
           requestWakeLock();
         }
       });
 
+      document.addEventListener("fullscreenchange", function () {
+        if (document.fullscreenElement) {
+          requestWakeLock();
+          lockLandscape();
+        } else if (strictKioskMode && isPlaying && document.visibilityState === "visible") {
+          requestImmersiveMode(false);
+        }
+      });
+
+      window.addEventListener("orientationchange", function () {
+        if (isPlaying) {
+          lockLandscape();
+        }
+      });
+
+      window.addEventListener("resize", function () {
+        if (strictKioskMode && isPlaying && document.visibilityState === "visible") {
+          requestImmersiveMode(false);
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (!strictKioskMode) {
+          return;
+        }
+        if (event.key === "Escape" || event.key === "F11") {
+          event.preventDefault();
+          requestImmersiveMode(false);
+        }
+      });
+
       appendDebug("UA: " + navigator.userAgent);
+      requestImmersiveMode(false);
+      startKioskEnforcer();
       showBlackScreen();
     </script>
   </body>

@@ -188,6 +188,79 @@
         appendDebug("video.src=" + video.src + " (idx=" + sourceIndex + ")");
       }
 
+      function swNormalizeUrl(rawSrc) {
+        return rawSrc + (rawSrc.indexOf("?") === -1 ? "?" : "&") + CACHE_BUST;
+      }
+
+      function primeOfflineVideoCache() {
+        if (!window.caches || !window.fetch) {
+          appendDebug("Offline prime: Cache API no disponible");
+          return;
+        }
+
+        function prefetchAt(index) {
+          var candidate;
+          var normalized;
+          var options;
+
+          if (index >= SOURCE_CANDIDATES.length) {
+            appendDebug("Offline prime: finalizado");
+            return;
+          }
+
+          candidate = SOURCE_CANDIDATES[index];
+          normalized = swNormalizeUrl(candidate);
+          options = { cache: "reload" };
+          if (/^https?:\/\//i.test(candidate)) {
+            options.mode = "no-cors";
+          }
+
+          fetch(normalized, options)
+            .then(function (response) {
+              appendDebug(
+                "Offline prime OK idx=" +
+                  index +
+                  " status=" +
+                  (response ? response.status : "n/a")
+              );
+            })
+            .catch(function (error) {
+              appendDebug(
+                "Offline prime FAIL idx=" +
+                  index +
+                  " err=" +
+                  (error && error.message ? error.message : "unknown")
+              );
+            })
+            .then(function () {
+              prefetchAt(index + 1);
+            });
+        }
+
+        prefetchAt(0);
+      }
+
+      function registerServiceWorker() {
+        if (!("serviceWorker" in navigator)) {
+          appendDebug("SW no soportado");
+          return;
+        }
+
+        navigator.serviceWorker
+          .register("./sw.js")
+          .then(function (registration) {
+            appendDebug("SW registrado: " + registration.scope);
+            return navigator.serviceWorker.ready;
+          })
+          .then(function () {
+            appendDebug("SW listo");
+            primeOfflineVideoCache();
+          })
+          .catch(function (error) {
+            appendDebug("SW registro fallo: " + (error && error.message ? error.message : "unknown"));
+          });
+      }
+
       function probeSources(done) {
         var probeIndex = 0;
 
@@ -584,6 +657,7 @@
       });
 
       appendDebug("UA: " + navigator.userAgent);
+      registerServiceWorker();
       requestImmersiveMode(false);
       startKioskEnforcer();
       showBlackScreen();

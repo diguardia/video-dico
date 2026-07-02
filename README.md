@@ -12,10 +12,25 @@ Para mantener compatibilidad, el JavaScript está escrito en estilo ES5 (sin `as
 ## Uso
 
 1. Colocá un video MP4 como `/video.mp4` en la raíz del proyecto (recomendado para uso offline y fijo en el dispositivo).
-2. Abrí `index.html` en un navegador móvil o servilo con un servidor estático.
-3. Tocá la pantalla para alternar:
+2. Serví el proyecto por `http://` o `https://` (no `file://`) para que el Service Worker pueda activarse.
+3. Abrí la app con internet al menos una vez para que se cacheen `index.html`, `manifest.webmanifest` y los videos configurados.
+4. Cuando veas que el video reproduce correctamente una vez, ya podés cortar internet y volver a abrir la app.
+5. Tocá la pantalla para alternar:
    - Negro → reproduce video
    - Video → vuelve a negro
+
+## Offline real (sin internet)
+
+- La app registra un Service Worker (`sw.js`) y cachea recursos críticos para arranque offline.
+- Los videos se cachean de forma que puedan reproducirse sin red, incluyendo solicitudes por rango (`Range`) del elemento `<video>`.
+- Si un video no fue cacheado todavía y no hay red, el reproductor no podrá abrir ese recurso.
+
+### Verificación rápida
+
+1. Abrí la app online una vez y reproducí el video.
+2. Desconectá internet.
+3. Cerrá y volvé a abrir la app.
+4. El video debería seguir reproduciendo sin depender de la red.
 
 ## Mantener pantalla encendida
 
